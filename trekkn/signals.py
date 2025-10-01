@@ -4,7 +4,7 @@ from django.dispatch import receiver
 
 # from django.conf import settings
 
-from .models import  TrekknUser, UserMission, Mission
+from .models import TrekknUser, UserMission, Mission
 
 
 @receiver(post_save, sender=TrekknUser)

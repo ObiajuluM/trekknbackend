@@ -6,9 +6,11 @@ from rest_framework import status
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken, TokenError
+from rest_framework import permissions
 
 # from django.contrib.auth.models import User
 from trekkn.models import TrekknUser, DailyActivity, Mission, UserMission, UserEventLog
+from trekkn.permissions import IsOwner
 from trekkn.serializers import (
     TrekknUserSerializer,
     DailyActivitySerializer,
@@ -139,11 +141,25 @@ class TrekknUserListCreateView(generics.ListCreateAPIView):
 class TrekknUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = TrekknUser.objects.all()
     serializer_class = TrekknUserSerializer
+    permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["patch", "get"]
     # TODO: restrict to owner or admin only
 
+    def get_permissions(self):
+        if self.request.method == "GET":
+            self.permission_classes = [
+                IsOwner,
+                permissions.IsAuthenticated,
+            ]
+        return super().get_permissions()
+
     def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
+        return Response(
+            data=TrekknUserSerializer(self.request.user, many=False).data,
+            status=status.HTTP_200_OK,
+        )
+
+        # return super().get(request, *args, **kwargs)
 
     def patch(self, request, *args, **kwargs):
         # if user is authenticated

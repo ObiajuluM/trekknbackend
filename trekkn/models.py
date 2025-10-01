@@ -9,6 +9,28 @@ from django.db import models
 import namer
 
 
+class TrekknUserManager(models.Manager):
+
+    def create_user(self, email, password=None, username=None, **extra_fields):
+        if not username:
+            # Auto-generate username if not provided
+            username = namer.generate(separator=" ", style="title")
+            # Ensure uniqueness
+            for _ in range(10):
+                if not TrekknUser.objects.filter(username=username).exists():
+                    break
+                username = namer.generate(separator=" ", style="title")
+            else:
+                raise ValueError(
+                    "Could not generate a unique username after 10 attempts"
+                )
+        user = self.model(email=email, username=username, **extra_fields)
+        if password:
+            user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+
 # Create your models here.
 class TrekknUser(AbstractUser):
     id = models.UUIDField(
@@ -19,13 +41,19 @@ class TrekknUser(AbstractUser):
     )
     device_id = models.CharField(max_length=200, blank=True, null=True)
     email = models.EmailField(unique=True)
-    name = models.CharField(max_length=100)
-    username = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=100, unique=True)
+    username = models.CharField(max_length=50)
     goal = models.IntegerField(default=1000)  # daily step goal
     balance = models.IntegerField(default=0)  # points balance
     aura = models.IntegerField(default=100)  # aura points
     level = models.IntegerField(default=1)  # user level
     streak = models.IntegerField(default=0)  # current streak
+
+    #
+    # solana_key = models.CharField(default=uuid.uuid4,
+    #     editable=False,)
+    # evm_key = models.CharField(default=uuid.uuid4,
+    #     editable=False,)
 
     # store unique code instead of full URL
     invite_code = models.CharField(
@@ -54,7 +82,9 @@ class TrekknUser(AbstractUser):
         return f"https://walkitapp.com/invite/{self.invite_code}"
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username"]
+    REQUIRED_FIELDS = ["name"]
+
+    objects = TrekknUserManager()
 
     def aura_to_next_level(self):
         """Aura needed to reach the next level."""

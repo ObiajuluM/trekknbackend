@@ -14,14 +14,16 @@ from .views import (
     UserEventLogDetailView,
 )
 
+from rest_framework_simplejwt.views import TokenRefreshView
+
 urlpatterns = [
     path("auth/sign-in/", GoogleAuthView.as_view()),
     path("auth/sign-out/", SignOutView.as_view()),
     path("users/", TrekknUserListCreateView.as_view(), name="user-list-create"),
     path(
-        "users/<str:id>/",
+        "users/me/",
         TrekknUserDetailView.as_view(
-            lookup_field="id",
+            # lookup_field="id",
         ),
         name="user-detail",
     ),
@@ -67,4 +69,5 @@ urlpatterns = [
         ),
         name="eventlog-detail",
     ),
+    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 ]
