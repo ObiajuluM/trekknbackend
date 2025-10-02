@@ -153,6 +153,29 @@ class TrekknUser(AbstractUser):
     def __str__(self):
         return self.username
 
+    # def calculate_streak(self):
+    #     """Calculate the current streak of consecutive days with 'steps' activity."""
+    #     from django.utils import timezone
+    #     from datetime import timedelta
+
+    #     activities = self.daily_activities.filter(source="steps").order_by("-timestamp")
+    #     if not activities.exists():
+    #         return 0
+
+    #     streak = 0
+    #     today = timezone.localdate()
+    #     expected_date = today
+
+    #     for activity in activities:
+    #         activity_date = activity.timestamp.date()
+    #         if activity_date == expected_date:
+    #             streak += 1
+    #             expected_date -= timedelta(days=1)
+    #         elif activity_date < expected_date:
+    #             break  # streak broken
+    #         # if activity_date > expected_date, skip (future or duplicate)
+    #     return streak
+
 
 # When creating the new user via invite, set:
 # new_user.invited_by = inviter

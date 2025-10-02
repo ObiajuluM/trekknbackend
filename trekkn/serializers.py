@@ -4,11 +4,34 @@ from .models import TrekknUser, DailyActivity, Mission, UserMission, UserEventLo
 
 class TrekknUserSerializer(serializers.ModelSerializer):
     # invited_by = serializers.SerializerMethodField()
+    streak = serializers.IntegerField(read_only=True)
 
     # def get_invited_by(self, obj):
     #     if obj.invited_by:
     #         return obj.invited_by
-    #     return None
+    #     return
+
+    def get_streak(self, obj: TrekknUser) -> int:
+        """Calculate the current streak of consecutive days with 'steps' activity for the user."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        activities = obj.daily_activities.filter(source="steps").order_by("-timestamp")
+        if not activities.exists():
+            return 0
+
+        streak = 0
+        today = timezone.localdate()
+        expected_date = today
+
+        for activity in activities:
+            activity_date = activity.timestamp.date()
+            if activity_date == expected_date:
+                streak += 1
+                expected_date -= timedelta(days=1)
+            elif activity_date < expected_date:
+                break  # streak broken
+        return streak
 
     def update(self, instance, validated_data):
         # Prevent patching invited_by if already set
@@ -31,6 +54,7 @@ class TrekknUserSerializer(serializers.ModelSerializer):
             "level",
             "streak",
             # "invite_code",
+            "date_joined",
             "invited_by",
             # "device_id",
             "invite_url",
@@ -46,6 +70,7 @@ class TrekknUserSerializer(serializers.ModelSerializer):
             "aura",
             "level",
             "streak",
+            "date_joined",
             # "device_id",
             # "invite_code",
             # "invited_by",

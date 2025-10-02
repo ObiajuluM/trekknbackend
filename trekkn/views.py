@@ -1,4 +1,5 @@
 # Create your views here.
+from asyncio import mixins
 from rest_framework.views import APIView
 from rest_framework import generics
 from rest_framework.response import Response
@@ -36,7 +37,9 @@ class GoogleAuthView(APIView):
         try:
             token = request.data.get("id_token")
             device_id = request.data.get("device_id")
-            invited_by = request.data.get("invited_by")
+            invite_code = request.data.get("invite_code")
+
+            # TODO: get user from invite code
 
             if not token:
                 return Response(
@@ -66,6 +69,7 @@ class GoogleAuthView(APIView):
                 if user.device_id is None:
                     # first time login from this user → bind device
                     user.device_id = device_id
+                    # TODO: handle invite code reward if invited_by is present
                     user.save()
                 elif user.device_id != device_id:
                     return Response(
@@ -79,9 +83,8 @@ class GoogleAuthView(APIView):
                     email=email,
                     name=name if name else "",
                     device_id=device_id,
+                    # TODO: handle invite code reward if invited_by is present
                 )
-
-            # TODO: handle invite code reward if invited_by is present
 
             # Issue JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -103,9 +106,9 @@ class SignOutView(APIView):
         refresh_token = request.data.get("refresh")
         access_token = request.data.get("access")
 
-        if not refresh_token or not access_token:
+        if not refresh_token:
             return Response(
-                {"error": "Both refresh and access tokens are required"},
+                {"error": "Refresh token required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -116,16 +119,17 @@ class SignOutView(APIView):
 
             # Blacklist access token
             access = AccessToken(access_token)
-            access.blacklist()
+            # access.blacklist()
 
             return Response(
                 {"success": "Successfully signed out"},
                 status=status.HTTP_205_RESET_CONTENT,
             )
 
-        except TokenError:
+        except Exception as e:
+            print(e)
             return Response(
-                {"error": "Invalid or expired token"},
+                {"error": f"{e}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -133,6 +137,7 @@ class SignOutView(APIView):
 class TrekknUserListCreateView(generics.ListCreateAPIView):
     queryset = TrekknUser.objects.all()
     serializer_class = TrekknUserSerializer
+    # permission_classes = [permissions.IsAuthenticated]
     # show only methods in here
     http_method_names = ["get"]
     # TODO: restrict to admin only
@@ -154,11 +159,13 @@ class TrekknUserDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().get_permissions()
 
     def get(self, request, *args, **kwargs):
-        return Response(
-            data=TrekknUserSerializer(self.request.user, many=False).data,
-            status=status.HTTP_200_OK,
-        )
-
+        try:
+            return Response(
+                data=TrekknUserSerializer(self.request.user, many=False).data,
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         # return super().get(request, *args, **kwargs)
 
     def patch(self, request, *args, **kwargs):
@@ -210,6 +217,20 @@ class UserEventLogListCreateView(generics.ListCreateAPIView):
 class UserEventLogDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = UserEventLog.objects.all()
     serializer_class = UserEventLogSerializer
+
+
+class ServerHealth(generics.RetrieveAPIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        try:
+            return Response(
+                data={"status": "ok"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # class GoogleAuthView(APIView):

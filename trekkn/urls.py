@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     GoogleAuthView,
+    ServerHealth,
     SignOutView,
     TrekknUserListCreateView,
     TrekknUserDetailView,
@@ -19,6 +20,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 urlpatterns = [
     path("auth/sign-in/", GoogleAuthView.as_view()),
     path("auth/sign-out/", SignOutView.as_view()),
+    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("users/", TrekknUserListCreateView.as_view(), name="user-list-create"),
     path(
         "users/me/",
@@ -69,5 +71,5 @@ urlpatterns = [
         ),
         name="eventlog-detail",
     ),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("health/", ServerHealth.as_view(), name="health"),
 ]

@@ -33,6 +33,18 @@ def get_referred(referrer: TrekknUser, referred: TrekknUser):
             event_type="referral",
             description=f"Reffered: {referred.username}",
         )
+        #
+        #  get referred and show him love
+        DailyActivity.objects.create(
+            user=referred,
+            source="referral",
+        )
+        UserEventLog.objects.create(
+            user=referred,
+            event_type="referral",
+            description=f"I was reffered by {referrer.username}",
+        )
+
         return True
     except Exception as e:
         raise e
