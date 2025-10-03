@@ -46,7 +46,7 @@ class TrekknUserSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "email",
-            "name",
+            "displayname",
             "username",
             "goal",
             "balance",
@@ -91,6 +91,16 @@ class MissionSerializer(serializers.ModelSerializer):
 
 
 class UserMissionSerializer(serializers.ModelSerializer):
+    # Full mission details (for GET)
+    mission = MissionSerializer(read_only=True)
+
+    # Only ID input (for POST/PUT)
+    mission_id = serializers.PrimaryKeyRelatedField(
+        queryset=Mission.objects.all(),
+        source="mission",  # links to the Foreign Key
+        write_only=True,
+    )
+
     class Meta:
         model = UserMission
         fields = "__all__"
@@ -100,3 +110,15 @@ class UserEventLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserEventLog
         fields = "__all__"
+
+
+# --- NEW SERIALIZER FOR THE LEADERBOARD ---
+class LeaderboardUserSerializer(serializers.ModelSerializer):
+    # This tells the serializer: "Expect a read-only attribute named `total_steps`
+    # on the objects you receive, and include it in the output."
+    total_steps = serializers.ReadOnlyField()
+
+    class Meta:
+        model = TrekknUser
+        # Define the fields you want in the leaderboard response
+        fields = ["displayname", "username", "total_steps"]

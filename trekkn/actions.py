@@ -40,6 +40,7 @@ def get_referred(referrer: TrekknUser, referred: TrekknUser):
             source="referral",
         )
         UserEventLog.objects.create(
+            
             user=referred,
             event_type="referral",
             description=f"I was reffered by {referrer.username}",

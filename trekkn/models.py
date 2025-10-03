@@ -1,5 +1,4 @@
 import uuid
-from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 import hashlib
@@ -9,26 +8,26 @@ from django.db import models
 import namer
 
 
-class TrekknUserManager(models.Manager):
+# class TrekknUserManager(models.Manager):
 
-    def create_user(self, email, password=None, username=None, **extra_fields):
-        if not username:
-            # Auto-generate username if not provided
-            username = namer.generate(separator=" ", style="title")
-            # Ensure uniqueness
-            for _ in range(10):
-                if not TrekknUser.objects.filter(username=username).exists():
-                    break
-                username = namer.generate(separator=" ", style="title")
-            else:
-                raise ValueError(
-                    "Could not generate a unique username after 10 attempts"
-                )
-        user = self.model(email=email, username=username, **extra_fields)
-        if password:
-            user.set_password(password)
-        user.save(using=self._db)
-        return user
+#     def create_user(self, email, password=None, username=None, **extra_fields):
+#         if not username:
+#             # Auto-generate username if not provided
+#             username = namer.generate(separator=" ", style="title")
+#             # Ensure uniqueness
+#             for _ in range(10):
+#                 if not TrekknUser.objects.filter(username=username).exists():
+#                     break
+#                 username = namer.generate(separator=" ", style="title")
+#             else:
+#                 raise ValueError(
+#                     "Could not generate a unique username after 10 attempts"
+#                 )
+#         user = self.model(email=email, username=username, **extra_fields)
+#         if password:
+#             user.set_password(password)
+#         user.save(using=self._db)
+#         return user
 
 
 # Create your models here.
@@ -39,10 +38,15 @@ class TrekknUser(AbstractUser):
         editable=False,
         primary_key=True,
     )
-    device_id = models.CharField(max_length=200, blank=True, null=True)
+    device_id = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        unique=True,
+    )
     email = models.EmailField(unique=True)
-    name = models.CharField(max_length=100, unique=True)
-    username = models.CharField(max_length=50)
+    displayname = models.CharField(max_length=255, default="")
+    username = models.CharField(max_length=255)
     goal = models.IntegerField(default=1000)  # daily step goal
     balance = models.IntegerField(default=0)  # points balance
     aura = models.IntegerField(default=100)  # aura points
@@ -56,25 +60,19 @@ class TrekknUser(AbstractUser):
     #     editable=False,)
 
     # store unique code instead of full URL
-    invite_code = models.CharField(
-        max_length=50,
-        unique=True,
-        blank=True,
-        null=True,
-        # editable=False,
-    )
-    invited_by = models.CharField(
-        # "self",
-        # on_delete=models.SET_NULL,
-        max_length=50,
-        unique=True,
-        blank=True,
-        null=True,
-        # related_name="referrals",
-    )
+    invite_code = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    invited_by = models.CharField(max_length=50, unique=True, blank=True, null=True)
 
     BASE_AURA = 100
     LEVEL_MULTIPLIER = 20
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device_id"],
+                name="unique_device_id",
+            )
+        ]
 
     @property
     def invite_url(self):
@@ -82,9 +80,9 @@ class TrekknUser(AbstractUser):
         return f"https://walkitapp.com/invite/{self.invite_code}"
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["name"]
+    REQUIRED_FIELDS = ["username"]
 
-    objects = TrekknUserManager()
+    # objects = TrekknUserManager()
 
     def aura_to_next_level(self):
         """Aura needed to reach the next level."""
@@ -108,7 +106,7 @@ class TrekknUser(AbstractUser):
         self.update_level()
         # self.save()
 
-    def __generate_username(self) -> str:
+    def __generate_displayname(self) -> str:
         """method to generate display name"""
         return namer.generate(
             separator=" ",
@@ -123,18 +121,8 @@ class TrekknUser(AbstractUser):
     def save(self, **kwargs):
         if not self.invite_code:
             self.invite_code = self.__generate_invite_code()  # short random code
-        if not self.username:  # only if username is empty
-            for _ in range(10):  # try up to 10 times
-                username = self.__generate_username()
-                self.username = username
-                try:
-                    with transaction.atomic():  # ensure atomic save
-                        return super().save(**kwargs)
-                except IntegrityError:
-                    # username was taken by another process, retry
-                    continue
-            raise ValueError("Could not generate a unique username after 10 attempts")
-        # else:
+        if not self.displayname:  # only if username is empty
+            self.displayname = self.__generate_displayname()
         return super().save(**kwargs)
 
     # def save(self, **kwargs):
@@ -245,7 +233,7 @@ class DailyActivity(models.Model):
 
         # after saving, check missions
         self.check_missions()
-        return super().save(**kwargs)
+        # return super().save(**kwargs)
 
     def check_missions(self):
         """Check and complete missions if requirements are met."""

@@ -1,5 +1,8 @@
 # Create your views here.
-from asyncio import mixins
+from datetime import timedelta
+from django.db.models import Sum
+from django.db import models
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework import generics
 from rest_framework.response import Response
@@ -13,6 +16,7 @@ from rest_framework import permissions
 from trekkn.models import TrekknUser, DailyActivity, Mission, UserMission, UserEventLog
 from trekkn.permissions import IsOwner
 from trekkn.serializers import (
+    LeaderboardUserSerializer,
     TrekknUserSerializer,
     DailyActivitySerializer,
     MissionSerializer,
@@ -62,6 +66,17 @@ class GoogleAuthView(APIView):
             email = idinfo["email"]
             name = idinfo.get("name", "")
 
+            #
+            # 🚨 Check if device_id is already bound to another user
+            existing_user_with_device = TrekknUser.objects.filter(
+                device_id=device_id
+            ).first()
+            if existing_user_with_device and existing_user_with_device.email != email:
+                return Response(
+                    {"error": "This device is already linked to another account."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             # Check if user already exists
             try:
                 user = TrekknUser.objects.get(email=email)
@@ -76,15 +91,14 @@ class GoogleAuthView(APIView):
                         {"error": "This account is already bound to another device."},
                         status=status.HTTP_403_FORBIDDEN,
                     )
-
             except TrekknUser.DoesNotExist:
                 # New user → create and bind device
                 user = TrekknUser.objects.create_user(
                     email=email,
-                    name=name if name else "",
+                    username=name if name else "",
                     device_id=device_id,
-                    # TODO: handle invite code reward if invited_by is present
                 )
+                # TODO: handle invite code reward if invited_by is present
 
             # Issue JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -142,21 +156,87 @@ class TrekknUserListCreateView(generics.ListCreateAPIView):
     http_method_names = ["get"]
     # TODO: restrict to admin only
 
+    # --- ADD OR MODIFY THIS METHOD ---
+    # TODO: cache like a bastard
+    def get_serializer_class(self):
+        # If 'leaderboard' is in the query params, use the specific serializer
+        if self.request.query_params.get("leaderboard"):
+            return LeaderboardUserSerializer
+        # Otherwise, use the default
+        return super().get_serializer_class()
+
+    def list(self, request, *args, **kwargs):
+        level = self.request.query_params.get("level")
+        # "day", "week", "month"
+        leaderboard = self.request.query_params.get("leaderboard")
+
+        #
+        # users = TrekknUser.objects.all()
+        # serializer = self.get_serializer(users, many=True)
+
+        #  handle level
+        if level:
+            # 1. Get all users ordered by level (descending = higher level first)
+            users = TrekknUser.objects.all().order_by("-level")
+            serializer = self.get_serializer(users, many=True)
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+
+        # Handle step leaderboards
+        if leaderboard:
+            now = timezone.now()
+            if leaderboard == "day":
+                start_date = now - timedelta(days=1)
+            elif leaderboard == "week":
+                start_date = now - timedelta(weeks=1)
+            elif leaderboard == "month":
+                start_date = now - timedelta(days=30)
+            elif leaderboard == "year":
+                start_date = now - timedelta(weeks=52)
+            else:
+                return Response(
+                    {"error": "Invalid leaderboard type. Use day, week, or month."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Aggregate total steps in range
+            users = (
+                TrekknUser.objects.annotate(
+                    total_steps=Sum(
+                        "daily_activities__step_count",
+                        filter=models.Q(daily_activities__timestamp__gte=start_date)
+                        & models.Q(daily_activities__source="steps"),
+                    )
+                )
+                .order_by("-total_steps")
+                .exclude(total_steps=None)[:100]  # top 100 only
+            )
+
+            serializer = self.get_serializer(users, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return super().list(request, *args, **kwargs)
+
 
 class TrekknUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = TrekknUser.objects.all()
     serializer_class = TrekknUserSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [
+        IsOwner,
+        permissions.IsAuthenticated,
+    ]
     http_method_names = ["patch", "get"]
     # TODO: restrict to owner or admin only
 
-    def get_permissions(self):
-        if self.request.method == "GET":
-            self.permission_classes = [
-                IsOwner,
-                permissions.IsAuthenticated,
-            ]
-        return super().get_permissions()
+    # def get_permissions(self):
+    #     if self.request.method == "GET":
+    #         self.permission_classes = [
+    #             IsOwner,
+    #             permissions.IsAuthenticated,
+    #         ]
+    #     return super().get_permissions()
 
     def get(self, request, *args, **kwargs):
         try:
@@ -170,7 +250,18 @@ class TrekknUserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def patch(self, request, *args, **kwargs):
         # if user is authenticated
-        return super().partial_update(request, *args, **kwargs)
+        # partial=True means we only update the fields
+        # provided in the request
+        try:
+            serializer = TrekknUserSerializer(
+                self.request.user, data=self.request.data, partial=True
+            )
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # return super().patch(request, *args, **kwargs)
 
 
 class DailyActivityListCreateView(generics.ListCreateAPIView):
@@ -180,6 +271,19 @@ class DailyActivityListCreateView(generics.ListCreateAPIView):
     http_method_names = ["get"]
     # TODO: admin only
     # TODO: restrict to owner or admin only
+
+    def get(self, request, *args, **kwargs):
+        try:
+            # Get all events for the authenticated user
+            if self.request.user.is_authenticated:
+                events = DailyActivity.objects.filter(user=self.request.user).order_by(
+                    "-timestamp"
+                )
+                serializer = self.get_serializer(events, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return super().get(request, *args, **kwargs)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DailyActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -202,6 +306,18 @@ class MissionDetailView(generics.RetrieveUpdateDestroyAPIView):
 class UserMissionListCreateView(generics.ListCreateAPIView):
     queryset = UserMission.objects.all()
     serializer_class = UserMissionSerializer
+    http_method_names = ["get"]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            # Get all events for the authenticated user
+            if self.request.user.is_authenticated:
+                events = UserMission.objects.filter(user=self.request.user)
+                serializer = self.get_serializer(events, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return super().get(request, *args, **kwargs)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserMissionDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -212,6 +328,17 @@ class UserMissionDetailView(generics.RetrieveUpdateDestroyAPIView):
 class UserEventLogListCreateView(generics.ListCreateAPIView):
     queryset = UserEventLog.objects.all()
     serializer_class = UserEventLogSerializer
+
+    def get(self, request, *args, **kwargs):
+        # Get all events for the authenticated user
+
+        # if self.request.user.is_authenticated:
+        #     events = UserEventLog.objects.filter(user=self.request.user).order_by(
+        #         "-timestamp"
+        #     )
+        #     serializer = self.get_serializer(events, many=True)
+        #     return Response(serializer.data, status=status.HTTP_200_OK)
+        return super().get(request, *args, **kwargs)
 
 
 class UserEventLogDetailView(generics.RetrieveUpdateDestroyAPIView):

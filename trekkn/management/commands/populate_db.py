@@ -1,78 +1,83 @@
+import random
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from faker import Faker
-import random
-
-from trekkn.models import DailyActivity, Mission, TrekknUser, UserMission
-
-
-fake = Faker()
+import uuid
+from trekkn.models import TrekknUser, DailyActivity, Mission, UserMission, UserEventLog
 
 
 class Command(BaseCommand):
-    help = "Seed the database with sample users, activities, missions"
+    help = "Seed the database with fake data using Faker"
 
     def handle(self, *args, **kwargs):
-        self.stdout.write(self.style.NOTICE("🌱 Seeding database..."))
-
-        # --- Create Missions if none exist ---
-        if Mission.objects.count() == 0:
-            missions = [
-                {
-                    "name": "Walk 1000 steps",
-                    "description": "Complete 1000 steps in a day",
-                    "requirement_steps": 1000,
-                    "aura_reward": 10,
-                },
-                {
-                    "name": "Walk 5000 steps",
-                    "description": "Complete 5000 steps in a day",
-                    "requirement_steps": 5000,
-                    "aura_reward": 50,
-                },
-                {
-                    "name": "Referral bonus",
-                    "description": "Invite a friend",
-                    "requirement_steps": 0,
-                    "aura_reward": 50,
-                },
-            ]
-            for m in missions:
-                Mission.objects.create(**m)
-            self.stdout.write(self.style.SUCCESS("✅ Missions created"))
+        fake = Faker()
 
         # --- Create Users ---
-        for _ in range(5):  # make 5 users
-            email = fake.unique.email()
-            user = TrekknUser.objects.create_user(
-                email=email,
+        self.stdout.write(self.style.SUCCESS("Creating users..."))
+        users = []
+        for _ in range(10):  # create 10 users
+            user = TrekknUser.objects.create(
+                email=fake.unique.email(),
                 username=fake.user_name(),
-                name=fake.name(),
-                password="password123",
-                goal=random.choice([1000, 5000, 10000]),
-                aura=random.randint(50, 200),
-                level=random.randint(1, 3),
+                displayname=fake.name(),
+                device_id=fake.unique.uuid4(),
+                goal=random.choice([1000, 2000, 5000, 10000]),
+                balance=random.randint(0, 5000),
+                aura=random.randint(50, 500),
+                level=random.randint(1, 5),
+                streak=random.randint(0, 10),
             )
+            users.append(user)
 
-            # Assign all missions
-            for mission in Mission.objects.all():
+        # --- Create Missions ---
+        self.stdout.write(self.style.SUCCESS("Creating missions..."))
+        missions = []
+        for i in range(5):
+            mission = Mission.objects.create(
+                # id=uuid.uuid4(),
+                name=f"Mission {i+1} {fake.name()}",
+                description=fake.sentence(),
+                requirement_steps=random.choice([1000, 2000, 5000, 10000]),
+                aura_reward=random.randint(10, 100),
+            )
+            missions.append(mission)
+
+        # --- Assign missions to users ---
+        self.stdout.write(self.style.SUCCESS("Assigning missions..."))
+        for user in users:
+            for mission in random.sample(missions, k=3):  # give each user 3 missions
                 UserMission.objects.get_or_create(user=user, mission=mission)
 
-            self.stdout.write(self.style.SUCCESS(f"👤 Created user: {user.email}"))
-
-            # --- Add Daily Activities ---
-            for _ in range(random.randint(3, 7)):  # 3–7 activities per user
-                steps = random.randint(500, 8000)
-                activity = DailyActivity.objects.create(
+        # --- Create Activities ---
+        self.stdout.write(self.style.SUCCESS("Creating activities..."))
+        for user in users:
+            for _ in range(random.randint(5, 15)):  # random activities per user
+                DailyActivity.objects.create(
                     user=user,
-                    step_count=steps,
-                    conversion_rate=0.5,
-                    source="steps",
-                )
-                self.stdout.write(
-                    self.style.NOTICE(
-                        f"   ➡ Added activity: {steps} steps → {activity.aura_gained} aura"
-                    )
+                    step_count=random.randint(100, 10000),
+                    timestamp=fake.date_time_this_year(
+                        tzinfo=timezone.get_current_timezone()
+                    ),
+                    conversion_rate=0.05,
+                    source=random.choice(["steps", "referral", "bonus"]),
                 )
 
-        self.stdout.write(self.style.SUCCESS("🌟 Database seeding complete!"))
+        # --- Create Event Logs ---
+        self.stdout.write(self.style.SUCCESS("Creating event logs..."))
+        for user in users:
+            for _ in range(random.randint(3, 7)):
+                UserEventLog.objects.create(
+                    # id=uuid.uuid4(),
+                    user=user,
+                    event_type=random.choice(["steps", "referral", "bonus"]),
+                    description=fake.text(),
+                    timestamp=fake.date_time_this_year(
+                        tzinfo=timezone.get_current_timezone()
+                    ),
+                    metadata={"ip": fake.ipv4(), "device": fake.word()},
+                )
+
+        self.stdout.write(
+            self.style.SUCCESS("Database successfully seeded with fake data!")
+        )
