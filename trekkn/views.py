@@ -268,9 +268,17 @@ class DailyActivityListCreateView(generics.ListCreateAPIView):
     queryset = DailyActivity.objects.all()
     serializer_class = DailyActivitySerializer
     # show only methods in here
-    http_method_names = ["get"]
-    # TODO: admin only
+    # http_method_names = ["get"]
+    # TODO: must be auth
     # TODO: restrict to owner or admin only
+
+    # def get_permissions(self):
+    #     if self.request.method == "POST":
+    #         self.permission_classes = [
+    #             IsOwner,
+    #             permissions.IsAuthenticated,
+    #         ]
+    #     return super().get_permissions()
 
     def get(self, request, *args, **kwargs):
         try:
