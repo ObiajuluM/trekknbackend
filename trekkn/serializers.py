@@ -78,6 +78,7 @@ class TrekknUserSerializer(serializers.ModelSerializer):
         ]
 
 
+# todo limit serializer writwbality to
 class DailyActivitySerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyActivity

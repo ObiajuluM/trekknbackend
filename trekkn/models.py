@@ -202,7 +202,7 @@ class DailyActivity(models.Model):
         if self.source == "steps":
             return self.step_count * self.conversion_rate
         elif self.source == "referral":
-            return 100  # flat reward for referral
+            return 500  # flat reward for referral
         else:
             return 0
 

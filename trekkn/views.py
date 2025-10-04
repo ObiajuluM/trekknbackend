@@ -270,7 +270,7 @@ class DailyActivityListCreateView(generics.ListCreateAPIView):
     # show only methods in here
     # http_method_names = ["get"]
     # TODO: must be auth
-    # TODO: restrict to owner or admin only
+    # TODO: restrict to owner or admin only, can only be written once a day too
 
     # def get_permissions(self):
     #     if self.request.method == "POST":
@@ -282,6 +282,7 @@ class DailyActivityListCreateView(generics.ListCreateAPIView):
 
     def get(self, request, *args, **kwargs):
         try:
+
             # Get all events for the authenticated user
             if self.request.user.is_authenticated:
                 events = DailyActivity.objects.filter(user=self.request.user).order_by(
