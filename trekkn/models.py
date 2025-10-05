@@ -3,6 +3,14 @@ from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 import hashlib
 from django.db import models
+from eth_account import Account
+from solders.keypair import Keypair
+
+from web3 import Web3
+from web3.contract import Contract
+
+from eth_account.datastructures import SignedTransaction
+
 
 # pip install unique-namer
 import namer
@@ -54,10 +62,26 @@ class TrekknUser(AbstractUser):
     streak = models.IntegerField(default=0)  # current streak
 
     #
-    # solana_key = models.CharField(default=uuid.uuid4,
-    #     editable=False,)
-    # evm_key = models.CharField(default=uuid.uuid4,
-    #     editable=False,)
+    evm_key = models.CharField(
+        # editable=False,
+        blank=True,
+        null=True,
+    )
+    evm_addr = models.CharField(
+        blank=True,
+        null=True,
+        # editable=False,
+    )
+    sol_key = models.CharField(
+        # editable=False,
+        blank=True,
+        null=True,
+    )
+    sol_addr = models.CharField(
+        blank=True,
+        null=True,
+        # editable=False,
+    )
 
     # store unique code instead of full URL
     invite_code = models.CharField(max_length=50, unique=True, blank=True, null=True)
@@ -83,6 +107,21 @@ class TrekknUser(AbstractUser):
     REQUIRED_FIELDS = ["username"]
 
     # objects = TrekknUserManager()
+
+    def __generate_evm_account(self):
+        """Generate a new EVM account and return private key and address."""
+        account = Account.create()
+        private_key = account.key.hex()
+        address = account.address
+        return private_key, address
+
+    def __generate_solana_account(self):
+        # Generate a new Solana keypair
+        keypair = Keypair.generate()
+        private_key = keypair.secret_key  # bytes
+        public_key = keypair.public_key  # PublicKey object
+        address = str(public_key)  # Solana address as string
+        return private_key, address
 
     def aura_to_next_level(self):
         """Aura needed to reach the next level."""
@@ -121,6 +160,10 @@ class TrekknUser(AbstractUser):
     def save(self, **kwargs):
         if not self.invite_code:
             self.invite_code = self.__generate_invite_code()  # short random code
+        if not self.sol_key:
+            self.sol_key, self.sol_addr = self.__generate_solana_account()
+        if not self.evm_key:
+            self.evm_key, self.evm_addr = self.__generate_evm_account()
         if not self.displayname:  # only if username is empty
             self.displayname = self.__generate_displayname()
         return super().save(**kwargs)
@@ -199,7 +242,9 @@ class DailyActivity(models.Model):
 
     def calculate_rewards(self):
         """Calculate reward points from steps and conversion rate."""
-        if self.source == "steps":
+        print("will not reward below 1k")
+        # only rewards steps if above 1000
+        if self.source == "steps" and self.step_count >= 1000:
             return self.step_count * self.conversion_rate
         elif self.source == "referral":
             return 500  # flat reward for referral
@@ -207,6 +252,8 @@ class DailyActivity(models.Model):
             return 0
 
     def calculate_aura(self):
+        # Read this
+        print("will not aura below 1k")
         """Basic rule: +10 Aura per 1000 rewardable steps."""
         if self.source == "steps":
             return (self.step_count // 1000) * 10
@@ -217,13 +264,16 @@ class DailyActivity(models.Model):
 
     def save(self, *args, **kwargs):
         # calculate rewards if missing
-        if self.amount_rewarded == 0 and self.conversion_rate > 0:
-            self.amount_rewarded = self.calculate_rewards()
+        # if self.amount_rewarded == 0 and self.conversion_rate > 0:
+        #     self.amount_rewarded = self.calculate_rewards()
+        self.amount_rewarded = self.calculate_rewards()
 
         # calculate aura if missing
-        if self.aura_gained == 0:
-            self.aura_gained = self.calculate_aura()
-
+        # # if self.aura_gained == 0:
+        #     self.aura_gained = self.calculate_aura()
+        #     print(self.aura_gained)
+        self.aura_gained = self.calculate_aura()
+        # print(self.aura_gained)
         super().save(*args, **kwargs)  # save activity first so values exist
 
         # --- update user ---

@@ -11,8 +11,10 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken, TokenError
 from rest_framework import permissions
+from yaml import serialize
 
 # from django.contrib.auth.models import User
+from trekkn.actions import log_steps_and_reward_user
 from trekkn.models import TrekknUser, DailyActivity, Mission, UserMission, UserEventLog
 from trekkn.permissions import IsOwner
 from trekkn.serializers import (
@@ -268,26 +270,52 @@ class DailyActivityListCreateView(generics.ListCreateAPIView):
     queryset = DailyActivity.objects.all()
     serializer_class = DailyActivitySerializer
     # show only methods in here
-    # http_method_names = ["get"]
     # TODO: must be auth
     # TODO: restrict to owner or admin only, can only be written once a day too
 
-    # def get_permissions(self):
-    #     if self.request.method == "POST":
-    #         self.permission_classes = [
-    #             IsOwner,
-    #             permissions.IsAuthenticated,
-    #         ]
-    #     return super().get_permissions()
+    def get_permissions(self):
+        if self.request.method == "POST":
+            self.permission_classes = [
+                permissions.IsAuthenticated,
+            ]
+        return super().get_permissions()
+
+    def post(self, request, *args, **kwargs):
+        #  require the caller to be authenticated
+        # if not self.request.user.is_authenticated:
+        #     return Response(
+        #         {"error": "Authentication required."},
+        #         status=status.HTTP_401_UNAUTHORIZED,
+        #     )
+
+        try:
+            now = timezone.now()
+            cutoff = now - timedelta(hours=23)
+            recent_activity = DailyActivity.objects.filter(
+                user=self.request.user, timestamp__gte=cutoff
+            ).exists()
+            if recent_activity:
+                return Response(
+                    {"error": "You can only log activity once every 23 hours."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            # if conditions are met, log steps and reward user
+            activity = log_steps_and_reward_user(
+                user=self.request.user,
+                steps=self.request.data.get("steps", 0),
+            )
+            serializer = self.get_serializer(activity)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request, *args, **kwargs):
         try:
-
             # Get all events for the authenticated user
             if self.request.user.is_authenticated:
                 events = DailyActivity.objects.filter(user=self.request.user).order_by(
                     "-timestamp"
-                )
+                )[:50]
                 serializer = self.get_serializer(events, many=True)
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return super().get(request, *args, **kwargs)

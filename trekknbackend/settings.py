@@ -144,6 +144,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
+    # todo: may adjust to sane values later
     "ACCESS_TOKEN_LIFETIME": timedelta(weeks=500),
     "REFRESH_TOKEN_LIFETIME": timedelta(weeks=500),
     "BLACKLIST_AFTER_ROTATION": True,

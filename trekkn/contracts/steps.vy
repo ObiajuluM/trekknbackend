@@ -5,7 +5,7 @@
 creator: address 
 
 event WalkLog:
-    user: indexed(String[256])
+    user: indexed(address)
     steps: uint256
     time: indexed(uint256)
 
@@ -14,7 +14,7 @@ def __init__():
     self.creator = msg.sender
     
 @external
-def logWalk(_user: String[256], _steps: uint256):
+def logWalk(_user: address, _steps: uint256):
     assert msg.sender == self.creator, "only the creator can call this method"
     log WalkLog(user=_user, steps=_steps, time=block.timestamp)
 

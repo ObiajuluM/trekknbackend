@@ -57,6 +57,8 @@ class TrekknUserSerializer(serializers.ModelSerializer):
             "date_joined",
             "invited_by",
             # "device_id",
+            "sol_addr",
+            "evm_addr",
             "invite_url",
         ]
 
@@ -71,6 +73,10 @@ class TrekknUserSerializer(serializers.ModelSerializer):
             "level",
             "streak",
             "date_joined",
+            "sol_addr",
+            "evm_addr",
+            # "sol_key",
+            # "evm_key"
             # "device_id",
             # "invite_code",
             # "invited_by",
