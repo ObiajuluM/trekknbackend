@@ -6,11 +6,6 @@ from django.db import models
 from eth_account import Account
 from solders.keypair import Keypair
 
-from web3 import Web3
-from web3.contract import Contract
-
-from eth_account.datastructures import SignedTransaction
-
 
 # pip install unique-namer
 import namer
@@ -117,10 +112,11 @@ class TrekknUser(AbstractUser):
 
     def __generate_solana_account(self):
         # Generate a new Solana keypair
-        keypair = Keypair.generate()
-        private_key = keypair.secret_key  # bytes
-        public_key = keypair.public_key  # PublicKey object
-        address = str(public_key)  # Solana address as string
+        account = Keypair()
+        # keys = Keypair().from_bytes(bytes)
+        private_key = str(account.secret().hex())  # bytes
+        address = str(account.pubkey())  # PublicKey object
+        # address = str(public_key)  # Solana address as string
         return private_key, address
 
     def aura_to_next_level(self):
@@ -160,10 +156,11 @@ class TrekknUser(AbstractUser):
     def save(self, **kwargs):
         if not self.invite_code:
             self.invite_code = self.__generate_invite_code()  # short random code
-        if not self.sol_key:
-            self.sol_key, self.sol_addr = self.__generate_solana_account()
         if not self.evm_key:
             self.evm_key, self.evm_addr = self.__generate_evm_account()
+        if not self.sol_key:
+            self.sol_key, self.sol_addr = self.__generate_solana_account()
+            # self.sol_key, self.sol_addr = self.__generate_solana_account()
         if not self.displayname:  # only if username is empty
             self.displayname = self.__generate_displayname()
         return super().save(**kwargs)

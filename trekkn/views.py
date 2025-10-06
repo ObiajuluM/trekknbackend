@@ -11,7 +11,8 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken, TokenError
 from rest_framework import permissions
-from yaml import serialize
+from web3 import Account
+from solders.keypair import Keypair
 
 # from django.contrib.auth.models import User
 from trekkn.actions import log_steps_and_reward_user
@@ -388,6 +389,8 @@ class ServerHealth(generics.RetrieveAPIView):
     authentication_classes = []
 
     def get(self, request, *args, **kwargs):
+        # print(self.generate_evm_account())
+        # print(self.generate_solana_account())
         try:
             return Response(
                 data={"status": "ok"},

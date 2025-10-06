@@ -1,3 +1,4 @@
+from trekkn.contracts.loggable import write_steps_to_multiple_networks
 from trekkn.models import DailyActivity, TrekknUser, UserEventLog
 
 
@@ -9,7 +10,6 @@ def log_steps_and_reward_user(user: TrekknUser, steps: int):
             step_count=steps,
             # conversion_rate=0.5,
             source="steps",
-            
         )
         # log event
         UserEventLog.objects.create(
@@ -17,7 +17,12 @@ def log_steps_and_reward_user(user: TrekknUser, steps: int):
             event_type="steps",
             description=f"Logged {steps} steps, query activity at {activity.id}",
         )
+        write_steps_to_multiple_networks(
+            user_address=user.evm_addr,
+            step_count=steps,
+        )
         return activity
+
     except Exception as e:
         raise e
 
