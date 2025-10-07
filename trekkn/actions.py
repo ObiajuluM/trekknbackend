@@ -29,26 +29,25 @@ def log_steps_and_reward_user(user: TrekknUser, steps: int):
 
 def get_referred(referrer: TrekknUser, referred: TrekknUser):
     try:
-        #  get referrer and show him love
-        referrer = DailyActivity.objects.create(
+        # get referrer and show him love
+        referrer_activity = DailyActivity.objects.create(
             user=referrer,
             source="referral",
         )
         UserEventLog.objects.create(
             user=referrer,
             event_type="referral",
-            description=f"Reffered: {referred.username}. Query at {referrer.id}",
+            description=f"Referred: {referred.username}. Query at {referrer_activity.id}",
         )
-        #
-        #  get referred and show him love
-        referred = DailyActivity.objects.create(
+        # get referred and show him love
+        referred_activity = DailyActivity.objects.create(
             user=referred,
             source="referral",
         )
         UserEventLog.objects.create(
             user=referred,
             event_type="referral",
-            description=f"I was reffered by {referrer.username}, query at {referred.id}",
+            description=f"I was referred by {referrer.username}, query at {referred_activity.id}",
         )
 
         return True

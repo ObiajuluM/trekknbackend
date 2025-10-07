@@ -93,20 +93,20 @@ class GoogleAuthView(APIView):
                 if user.device_id is None:
                     # first time login from this user → bind device
                     user.device_id = device_id
-                    # TODO: handle invite code reward, if user.invited_by is None and inviter is not None:
-
+                    # user.save()
                     # Reward flow: if user not invited before and valid inviter exists
-                    if user.invited_by is None and inviter:
-                        user.invited_by = inviter.invite_code
-                        user.save()
-                        get_referred(inviter, user)
-                        #
-                    user.save()
                 elif user.device_id != device_id:
                     return Response(
                         {"error": "This account is already bound to another device."},
                         status=status.HTTP_403_FORBIDDEN,
                     )
+
+                if user.invited_by is None and inviter:
+                    user.invited_by = inviter.invite_code
+                    print("setting invited by and rewarding")
+                    get_referred(inviter, user)
+
+                user.save()
             except TrekknUser.DoesNotExist:
                 # New user → create and bind device
                 user = TrekknUser.objects.create_user(
@@ -118,8 +118,8 @@ class GoogleAuthView(APIView):
                 # Reward flow: as a new user, if valid inviter exists
                 if inviter:
                     user.invited_by = inviter.invite_code
-                    user.save()
                     get_referred(inviter, user)
+                    user.save()
 
             # Issue JWT tokens
             refresh = RefreshToken.for_user(user)

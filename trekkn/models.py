@@ -11,28 +11,6 @@ from solders.keypair import Keypair
 import namer
 
 
-# class TrekknUserManager(models.Manager):
-
-#     def create_user(self, email, password=None, username=None, **extra_fields):
-#         if not username:
-#             # Auto-generate username if not provided
-#             username = namer.generate(separator=" ", style="title")
-#             # Ensure uniqueness
-#             for _ in range(10):
-#                 if not TrekknUser.objects.filter(username=username).exists():
-#                     break
-#                 username = namer.generate(separator=" ", style="title")
-#             else:
-#                 raise ValueError(
-#                     "Could not generate a unique username after 10 attempts"
-#                 )
-#         user = self.model(email=email, username=username, **extra_fields)
-#         if password:
-#             user.set_password(password)
-#         user.save(using=self._db)
-#         return user
-
-
 # Create your models here.
 class TrekknUser(AbstractUser):
     id = models.UUIDField(
@@ -239,7 +217,7 @@ class DailyActivity(models.Model):
 
     def calculate_rewards(self):
         """Calculate reward points from steps and conversion rate."""
-        print("will not reward below 1k")
+        # print("will not reward below 1k")
         # only rewards steps if above 1000
         if self.source == "steps" and self.step_count >= 1000:
             return self.step_count * self.conversion_rate
@@ -250,7 +228,7 @@ class DailyActivity(models.Model):
 
     def calculate_aura(self):
         # Read this
-        print("will not aura below 1k")
+        # print("will not aura below 1k")
         """Basic rule: +10 Aura per 1000 rewardable steps."""
         if self.source == "steps":
             return (self.step_count // 1000) * 10

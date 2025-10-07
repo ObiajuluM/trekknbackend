@@ -12,6 +12,12 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from datetime import timedelta
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,16 +27,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-60$l=7igz5r$%50g6ga=c3@o6)k5i&@^$ku=03%&5x24fc*6)0"
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv("DEBUG")
 
-ALLOWED_HOSTS = [
-    "10.24.246.102",
-    "192.168.1.61",
-    "10.216.153.102",
-]
+ALLOWED_HOSTS = (
+    [
+        "10.24.246.102",
+        "192.168.1.61",
+        "10.216.153.102",
+    ]
+    if DEBUG
+    else os.getenv("ALLOWED_HOSTS").split(",")
+)
+
+
+CSRF_TRUSTED_ORIGINS = [] if DEBUG else os.getenv("CSRF_TRUSTED_ORIGINS").split(",")
 
 
 # Application definition
@@ -84,13 +97,28 @@ WSGI_APPLICATION = "trekknbackend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
 
+DATABASES = (
+    {
+        # for testing
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+    if DEBUG
+    else {
+        # for production
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST", "localhost"),
+            "PORT": os.getenv("DB_PORT", "5432"),
+        }
+    }
+)
 
 # CACHING
 CACHES = {
@@ -164,6 +192,5 @@ SIMPLE_JWT = {
 
 
 #  the web client id
-GOOGLE_CLIENT_ID = (
-    "871288827965-fu5qvubuipdrm9kdatq203t450n2s18m.apps.googleusercontent.com"
-)
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
