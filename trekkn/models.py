@@ -95,7 +95,7 @@ class TrekknUser(AbstractUser):
 
     @property
     def invite_url(self):
-        # TODO: may becmoe env variable
+        # TODO: may becomme env variable
         return f"https://walkitapp.com/invite/{self.invite_code}"
 
     USERNAME_FIELD = "email"

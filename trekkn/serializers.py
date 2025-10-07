@@ -37,6 +37,7 @@ class TrekknUserSerializer(serializers.ModelSerializer):
         # Prevent patching invited_by if already set
         if instance.invited_by is not None and "invited_by" in validated_data:
             validated_data.pop("invited_by")
+
         if instance.device_id is not None and "device_id" in validated_data:
             validated_data.pop("device_id")
         return super().update(instance, validated_data)

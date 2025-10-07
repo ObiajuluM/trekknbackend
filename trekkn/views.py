@@ -9,13 +9,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from google.oauth2 import id_token
 from google.auth.transport import requests
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken, TokenError
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework import permissions
-from web3 import Account
-from solders.keypair import Keypair
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 
 # from django.contrib.auth.models import User
-from trekkn.actions import log_steps_and_reward_user
+from trekkn.actions import get_referred, log_steps_and_reward_user
 from trekkn.models import TrekknUser, DailyActivity, Mission, UserMission, UserEventLog
 from trekkn.permissions import IsOwner
 from trekkn.serializers import (
@@ -26,7 +27,9 @@ from trekkn.serializers import (
     UserMissionSerializer,
     UserEventLogSerializer,
 )
-from trekknbackend import settings
+
+# from trekknbackend import settings
+from django.conf import settings
 
 
 # eward Flow
@@ -46,7 +49,11 @@ class GoogleAuthView(APIView):
             device_id = request.data.get("device_id")
             invite_code = request.data.get("invite_code")
 
-            # TODO: get user from invite code
+            #    get inviter from invite code
+            # --- Handle inviter via invite_code ---
+            inviter = None
+            if invite_code:
+                inviter = TrekknUser.objects.filter(invite_code=invite_code).first()
 
             if not token:
                 return Response(
@@ -69,7 +76,6 @@ class GoogleAuthView(APIView):
             email = idinfo["email"]
             name = idinfo.get("name", "")
 
-            #
             # 🚨 Check if device_id is already bound to another user
             existing_user_with_device = TrekknUser.objects.filter(
                 device_id=device_id
@@ -87,7 +93,14 @@ class GoogleAuthView(APIView):
                 if user.device_id is None:
                     # first time login from this user → bind device
                     user.device_id = device_id
-                    # TODO: handle invite code reward if invited_by is present
+                    # TODO: handle invite code reward, if user.invited_by is None and inviter is not None:
+
+                    # Reward flow: if user not invited before and valid inviter exists
+                    if user.invited_by is None and inviter:
+                        user.invited_by = inviter.invite_code
+                        user.save()
+                        get_referred(inviter, user)
+                        #
                     user.save()
                 elif user.device_id != device_id:
                     return Response(
@@ -101,7 +114,12 @@ class GoogleAuthView(APIView):
                     username=name if name else "",
                     device_id=device_id,
                 )
-                # TODO: handle invite code reward if invited_by is present
+
+                # Reward flow: as a new user, if valid inviter exists
+                if inviter:
+                    user.invited_by = inviter.invite_code
+                    user.save()
+                    get_referred(inviter, user)
 
             # Issue JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -119,7 +137,7 @@ class GoogleAuthView(APIView):
 
 class SignOutView(APIView):
     def post(self, request):
-        # TODO: get the user and retrieve their tokens
+
         refresh_token = request.data.get("refresh")
         access_token = request.data.get("access")
 
@@ -157,10 +175,7 @@ class TrekknUserListCreateView(generics.ListCreateAPIView):
     # permission_classes = [permissions.IsAuthenticated]
     # show only methods in here
     http_method_names = ["get"]
-    # TODO: restrict to admin only
 
-    # --- ADD OR MODIFY THIS METHOD ---
-    # TODO: cache like a bastard
     def get_serializer_class(self):
         # If 'leaderboard' is in the query params, use the specific serializer
         if self.request.query_params.get("leaderboard"):
@@ -168,14 +183,20 @@ class TrekknUserListCreateView(generics.ListCreateAPIView):
         # Otherwise, use the default
         return super().get_serializer_class()
 
+    def get_permissions(self):
+        # if the server is not in DEBUG mode, apply the permission
+        if not settings.DEBUG:
+            # if self.request.method == "GET":
+            self.permission_classes = [
+                IsOwner,
+                permissions.IsAuthenticated,
+            ]
+        return super().get_permissions()
+
     def list(self, request, *args, **kwargs):
         level = self.request.query_params.get("level")
         # "day", "week", "month"
         leaderboard = self.request.query_params.get("leaderboard")
-
-        #
-        # users = TrekknUser.objects.all()
-        # serializer = self.get_serializer(users, many=True)
 
         #  handle level
         if level:
@@ -226,20 +247,20 @@ class TrekknUserListCreateView(generics.ListCreateAPIView):
 class TrekknUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = TrekknUser.objects.all()
     serializer_class = TrekknUserSerializer
-    permission_classes = [
-        IsOwner,
-        permissions.IsAuthenticated,
-    ]
+    # permission_classes = [
+    #     IsOwner,
+    #     permissions.IsAuthenticated,
+    # ]
     http_method_names = ["patch", "get"]
-    # TODO: restrict to owner or admin only
 
-    # def get_permissions(self):
-    #     if self.request.method == "GET":
-    #         self.permission_classes = [
-    #             IsOwner,
-    #             permissions.IsAuthenticated,
-    #         ]
-    #     return super().get_permissions()
+    def get_permissions(self):
+        if not settings.DEBUG:
+            # if self.request.method == "GET":
+            self.permission_classes = [
+                IsOwner,
+                permissions.IsAuthenticated,
+            ]
+        return super().get_permissions()
 
     def get(self, request, *args, **kwargs):
         try:
@@ -271,24 +292,30 @@ class DailyActivityListCreateView(generics.ListCreateAPIView):
     queryset = DailyActivity.objects.all()
     serializer_class = DailyActivitySerializer
     # show only methods in here
-    # TODO: must be auth
-    # TODO: restrict to owner or admin only, can only be written once a day too
 
     def get_permissions(self):
-        if self.request.method == "POST":
+        if not settings.DEBUG:
+            # if self.request.method == "POST":
             self.permission_classes = [
+                IsOwner,
                 permissions.IsAuthenticated,
             ]
         return super().get_permissions()
 
-    def post(self, request, *args, **kwargs):
-        #  require the caller to be authenticated
-        # if not self.request.user.is_authenticated:
-        #     return Response(
-        #         {"error": "Authentication required."},
-        #         status=status.HTTP_401_UNAUTHORIZED,
-        #     )
+    def get(self, request, *args, **kwargs):
+        try:
+            # Get all events for the authenticated user
+            if self.request.user.is_authenticated:
+                events = DailyActivity.objects.filter(user=self.request.user).order_by(
+                    "-timestamp"
+                )[:50]
+                serializer = self.get_serializer(events, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return super().get(request, *args, **kwargs)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    def post(self, request, *args, **kwargs):
         try:
             now = timezone.now()
             cutoff = now - timedelta(hours=23)
@@ -310,62 +337,76 @@ class DailyActivityListCreateView(generics.ListCreateAPIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def get(self, request, *args, **kwargs):
-        try:
-            # Get all events for the authenticated user
-            if self.request.user.is_authenticated:
-                events = DailyActivity.objects.filter(user=self.request.user).order_by(
-                    "-timestamp"
-                )[:50]
-                serializer = self.get_serializer(events, many=True)
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return super().get(request, *args, **kwargs)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class DailyActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = DailyActivity.objects.all()
     serializer_class = DailyActivitySerializer
     # show only methods in here
-    http_method_names = ["get"]
+    http_method_names = [""]
 
 
 class MissionListCreateView(generics.ListCreateAPIView):
     queryset = Mission.objects.all()
     serializer_class = MissionSerializer
+    http_method_names = [""]
 
 
 class MissionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Mission.objects.all()
     serializer_class = MissionSerializer
+    http_method_names = [""]
 
 
+# @method_decorator(cache_page(20), name="get")
+# @method_decorator(vary_on_headers("Authorization"), name="get")
 class UserMissionListCreateView(generics.ListCreateAPIView):
     queryset = UserMission.objects.all()
     serializer_class = UserMissionSerializer
     http_method_names = ["get"]
 
+    def get_permissions(self):
+        if not settings.DEBUG:
+            # if self.request.method == "GET":
+            self.permission_classes = [
+                IsOwner,
+                permissions.IsAuthenticated,
+            ]
+        return super().get_permissions()
+
     def get(self, request, *args, **kwargs):
+        # print("called")
         try:
             # Get all events for the authenticated user
-            if self.request.user.is_authenticated:
-                events = UserMission.objects.filter(user=self.request.user)
-                serializer = self.get_serializer(events, many=True)
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return super().get(request, *args, **kwargs)
+            # if self.request.user.is_authenticated:
+            events = UserMission.objects.filter(user=self.request.user)
+            serializer = self.get_serializer(events, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        # return super().get(request, *args, **kwargs)
         except Exception as e:
+
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserMissionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = UserMission.objects.all()
     serializer_class = UserMissionSerializer
+    http_method_names = [""]
 
 
 class UserEventLogListCreateView(generics.ListCreateAPIView):
     queryset = UserEventLog.objects.all()
     serializer_class = UserEventLogSerializer
+
+    http_method_names = ["get"]
+
+    def get_permissions(self):
+        if not settings.DEBUG:
+            # if self.request.method == "GET":
+            self.permission_classes = [
+                IsOwner,
+                permissions.IsAuthenticated,
+            ]
+        return super().get_permissions()
 
     def get(self, request, *args, **kwargs):
         # Get all events for the authenticated user
@@ -382,9 +423,11 @@ class UserEventLogListCreateView(generics.ListCreateAPIView):
 class UserEventLogDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = UserEventLog.objects.all()
     serializer_class = UserEventLogSerializer
+    http_method_names = [""]
 
 
 class ServerHealth(generics.RetrieveAPIView):
+
     permission_classes = []
     authentication_classes = []
 
@@ -399,6 +442,47 @@ class ServerHealth(generics.RetrieveAPIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+
+# Configurations for production
+if not settings.DEBUG:
+    TrekknUserListCreateView = method_decorator(cache_page(60), name="list")(
+        TrekknUserListCreateView
+    )
+    TrekknUserListCreateView = method_decorator(
+        vary_on_headers("Authorization"), name="list"
+    )(TrekknUserListCreateView)
+
+    #
+    TrekknUserDetailView = method_decorator(cache_page(20), name="get")(
+        TrekknUserDetailView
+    )
+    TrekknUserDetailView = method_decorator(
+        vary_on_headers("Authorization"), name="get"
+    )(TrekknUserDetailView)
+
+    #
+    DailyActivityListCreateView = method_decorator(cache_page(60), name="get")(
+        DailyActivityListCreateView
+    )
+    DailyActivityListCreateView = method_decorator(
+        vary_on_headers("Authorization"), name="get"
+    )(DailyActivityListCreateView)
+
+    #
+    UserMissionListCreateView = method_decorator(cache_page(20), name="get")(
+        UserMissionListCreateView
+    )
+    UserMissionListCreateView = method_decorator(
+        vary_on_headers("Authorization"), name="get"
+    )(UserMissionListCreateView)
+
+    #
+    UserEventLogListCreateView = method_decorator(cache_page(60), name="get")(
+        UserEventLogListCreateView
+    )
+    UserEventLogListCreateView = method_decorator(
+        vary_on_headers("Authorization"), name="get"
+    )(UserEventLogListCreateView)
 
 # class GoogleAuthView(APIView):
 #     def post(self, request):
