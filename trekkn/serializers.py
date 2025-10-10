@@ -1,10 +1,15 @@
 from rest_framework import serializers
 from .models import TrekknUser, DailyActivity, Mission, UserMission, UserEventLog
+from django.utils import timezone
+from datetime import timedelta
 
 
 class TrekknUserSerializer(serializers.ModelSerializer):
     # invited_by = serializers.SerializerMethodField()
-    streak = serializers.IntegerField(read_only=True)
+    streak = serializers.SerializerMethodField(
+        read_only=True,
+        method_name="get_streak",
+    )
 
     # def get_invited_by(self, obj):
     #     if obj.invited_by:
@@ -13,8 +18,6 @@ class TrekknUserSerializer(serializers.ModelSerializer):
 
     def get_streak(self, obj: TrekknUser) -> int:
         """Calculate the current streak of consecutive days with 'steps' activity for the user."""
-        from django.utils import timezone
-        from datetime import timedelta
 
         activities = obj.daily_activities.filter(source="steps").order_by("-timestamp")
         if not activities.exists():

@@ -1,3 +1,4 @@
+from datetime import timedelta
 import uuid
 from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
@@ -61,7 +62,7 @@ class TrekknUser(AbstractUser):
     invited_by = models.CharField(max_length=50, unique=True, blank=True, null=True)
 
     BASE_AURA = 100
-    LEVEL_MULTIPLIER = 20
+    LEVEL_MULTIPLIER = 500
 
     class Meta:
         constraints = [
@@ -114,10 +115,31 @@ class TrekknUser(AbstractUser):
             self.level -= 1
 
     def add_aura(self, amount: int):
-        """Add aura and adjust level accordingly."""
+        """Add aura and adjust level and streak accordingly."""
         self.aura += amount
         self.update_level()
+        # self.streak = self.calculate_streak()
         # self.save()
+
+    # def calculate_streak(self):
+    #     """Calculate the current streak of consecutive days with 'steps' activity."""
+    #     activities = self.daily_activities.filter(source="steps").order_by("-timestamp")
+    #     if not activities.exists():
+    #         return 0
+
+    #     streak = 0
+    #     today = timezone.localdate()
+    #     expected_date = today
+
+    #     for activity in activities:
+    #         activity_date = activity.timestamp.date()
+    #         if activity_date == expected_date:
+    #             streak += 1
+    #             expected_date -= timedelta(days=1)
+    #         elif activity_date < expected_date:
+    #             break  # streak broken
+    #         # if activity_date > expected_date, skip (future or duplicate)
+    #     return streak
 
     def __generate_displayname(self) -> str:
         """method to generate display name"""

@@ -13,37 +13,49 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import os
-from dotenv import load_dotenv
+
+# from dotenv import load_dotenv
+import environ
 
 # Load environment variables from .env file
-load_dotenv()
-
-
+# load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Initialize environment variables
+env = environ.Env(DEBUG=(bool, True))
+
+## Take environment variables from .env file
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY")
+# SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG")
+DEBUG = env("DEBUG")
+# DEBUG: bool = os.getenv("DEBUG")
+# DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 ALLOWED_HOSTS = (
     [
         "10.24.246.102",
         "192.168.1.61",
         "10.216.153.102",
+        "localhost",
+        "0.0.0.0",
     ]
     if DEBUG
-    else os.getenv("ALLOWED_HOSTS").split(",")
+    else env.list("ALLOWED_HOSTS", default=[])
 )
 
 
-CSRF_TRUSTED_ORIGINS = [] if DEBUG else os.getenv("CSRF_TRUSTED_ORIGINS").split(",")
+CSRF_TRUSTED_ORIGINS = [] if DEBUG else env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 
 # Application definition
@@ -66,6 +78,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # for whitenoise
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -111,11 +125,11 @@ DATABASES = (
         # for production
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME"),
-            "USER": os.getenv("DB_USER"),
-            "PASSWORD": os.getenv("DB_PASSWORD"),
-            "HOST": os.getenv("DB_HOST", "localhost"),
-            "PORT": os.getenv("DB_PORT", "5432"),
+            "NAME": env("DB_NAME"),
+            "USER": env("DB_USER"),
+            "PASSWORD": env("DB_PASSWORD"),
+            "HOST": env("DB_HOST", default="localhost"),
+            "PORT": env("DB_PORT", default="5432"),
         }
     }
 )
@@ -165,6 +179,14 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Set STATIC_ROOT to a directory where collected static files will be stored
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+# Add static files directories if needed
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),  # Your app's static folder
+]
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -193,4 +215,4 @@ SIMPLE_JWT = {
 
 #  the web client id
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID")

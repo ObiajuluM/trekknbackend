@@ -43,6 +43,11 @@ NETWORKS_LIST_ = [
         "url": "https://testnet.evm.nodes.onflow.org/",
         "contract": "0xE496edfc5384Ba76d457a75a53B9819Ee9a62e3C",
     },
+    # # "ASSETCHAIN":
+    # {
+    #     "url": "https://enugu-rpc.assetchain.org/",
+    #     "contract": "0xE496edfc5384Ba76d457a75a53B9819Ee9a62e3C",
+    # },
     #
     #
     # "IOTA_EVM":
@@ -50,11 +55,11 @@ NETWORKS_LIST_ = [
     #     "url": "https://json-rpc.evm.testnet.iotaledger.net/",
     #     "contract": "0xE496edfc5384Ba76d457a75a53B9819Ee9a62e3C",
     # },
-    # # "XRPL_EVM":
-    # {
-    #     "url": "https://rpc.testnet.xrplevm.org/",
-    #     "contract": "0xE496edfc5384Ba76d457a75a53B9819Ee9a62e3C",
-    # },
+    # "XRPL_EVM":
+    {
+        "url": "https://rpc.testnet.xrplevm.org/",
+        "contract": "0x7965b0cff0ebe04051f221f07429d38d147c0c5c",
+    },
 ]
 
 
@@ -91,7 +96,7 @@ def write_steps_to_multiple_networks(
             # Connect to network
             web3 = Web3(Web3.HTTPProvider(url))
             walk_log_contract: Contract = web3.eth.contract(
-                address=contract_address,
+                address=Web3.to_checksum_address(contract_address),
                 abi=ABI,
                 bytecode=BYTECODE,
             )
