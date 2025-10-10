@@ -1,0 +1,11 @@
+paste env and modify fields
+
+#migrates
+python manage.py migrate
+
+# creates staticfiles dir
+python manage.py collectstatic --noinput
+
+# create the admin, use an email and password you can remember and send
+python manage.py createsuperuser
+
