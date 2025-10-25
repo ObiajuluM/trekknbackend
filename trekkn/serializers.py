@@ -17,23 +17,32 @@ class TrekknUserSerializer(serializers.ModelSerializer):
     #     return
 
     def get_streak(self, obj: TrekknUser) -> int:
-        """Calculate the current streak of consecutive days with 'steps' activity for the user."""
+        """Calculate current streak of consecutive days with 'steps' activity.
+        If there's no activity today, allow the streak to persist through the end of today
+        by starting from yesterday. This matches the expectation that a Mon-Tue-Wed streak
+        still shows 3 on Thursday until the day ends.
+        """
 
-        activities = obj.daily_activities.filter(source="steps").order_by("-timestamp")
-        if not activities.exists():
+        # Get all activity dates (unique) for steps
+        timestamps = (
+            obj.daily_activities.filter(source="steps")
+            .order_by("-timestamp")
+            .values_list("timestamp", flat=True)
+        )
+
+        if not timestamps:
             return 0
 
-        streak = 0
+        activity_dates = {ts.date() for ts in timestamps}
         today = timezone.localdate()
-        expected_date = today
 
-        for activity in activities:
-            activity_date = activity.timestamp.date()
-            if activity_date == expected_date:
-                streak += 1
-                expected_date -= timedelta(days=1)
-            elif activity_date < expected_date:
-                break  # streak broken
+        # Start from today if user has activity today, otherwise start from yesterday
+        expected_date = today if today in activity_dates else today - timedelta(days=1)
+
+        streak = 0
+        while expected_date in activity_dates:
+            streak += 1
+            expected_date -= timedelta(days=1)
         return streak
 
     def update(self, instance, validated_data):

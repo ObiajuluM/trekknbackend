@@ -72,7 +72,7 @@ class GoogleAuthView(APIView):
                 requests.Request(),
                 settings.GOOGLE_CLIENT_ID,
             )
-
+            print(idinfo)
             email = idinfo["email"]
             name = idinfo.get("name", "")
 
