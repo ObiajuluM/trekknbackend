@@ -1,4 +1,4 @@
-# Trekkn Backend (Django + DRF)
+# Walk It Backend (Django + DRF)
 
 Production-ready Django REST API for activity tracking, missions, referrals, leaderboards, and blockchain logging (EVM + Solana). Includes Google Sign-In, JWT auth, caching, and Docker/Gunicorn deployment.
 
