@@ -62,7 +62,7 @@ class TrekknUser(AbstractUser):
     invited_by = models.CharField(max_length=50, unique=True, blank=True, null=True)
 
     BASE_AURA = 100
-    LEVEL_MULTIPLIER = 500
+    LEVEL_MULTIPLIER = 200
 
     class Meta:
         constraints = [
