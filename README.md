@@ -223,6 +223,3 @@ python manage.py test
 - Serve over HTTPS in production.
 - Consider rotating JWT refresh tokens and setting reasonable lifetimes.
 
-## License
-
-Add your license of choice here (e.g., MIT).
